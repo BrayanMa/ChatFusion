@@ -1,5 +1,6 @@
 package fr.uge.chatFusion.Client;
 
+import fr.uge.chatFusion.Context.Context;
 import fr.uge.chatFusion.Reader.MessageReader;
 import fr.uge.chatFusion.Reader.Reader;
 import fr.uge.chatFusion.Utils.Message;
@@ -13,6 +14,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Objects;
 import java.util.Queue;
@@ -25,167 +27,12 @@ import java.util.logging.Logger;
 
 public class Client {
 
-    static private class Context {
-        private final SelectionKey key;
-        private final SocketChannel sc;
-        private final ByteBuffer bufferIn = ByteBuffer.allocate(BUFFER_SIZE);
-        private final ByteBuffer bufferOut = ByteBuffer.allocate(BUFFER_SIZE);
-        private final ArrayDeque<Message> queue = new ArrayDeque<>();
-        private boolean closed = false;
-        private final MessageReader messageReader = new MessageReader();
-
-        private Context(SelectionKey key) {
-            this.key = key;
-            this.sc = (SocketChannel) key.channel();
-        }
-
-        /**
-         * Process the content of bufferIn
-         *
-         * The convention is that bufferIn is in write-mode before the call to process
-         * and after the call
-         *
-         */
-        private void processIn() {
-            for (;;) {
-                Reader.ProcessStatus status = messageReader.process(bufferIn);
-                switch (status) {
-                    case DONE:
-                        var value = messageReader.get();
-                        System.out.println(value.login() + " \n\t↳ " + value.texte());
-                        messageReader.reset();
-                        break;
-                    case REFILL:
-                        return;
-                    case ERROR:
-                        silentlyClose();
-                        return;
-                }
-            }
-        }
-
-        /**
-         * Add a message to the message queue, tries to fill bufferOut and updateInterestOps
-         *
-         * @param msg
-         */
-        private void queueMessage(Message msg) {
-            // TODO
-            queue.add(msg);
-            processOut();
-            updateInterestOps();
-        }
-
-        /**
-         * Try to fill bufferOut from the message queue
-         *
-         */
-        private void processOut() {
-            // TODO
-            while (!queue.isEmpty()){
-                var msg = queue.peek();
-                //var size = msg.login().length() + msg.texte().length() + 2 * Integer.BYTES;
-                var login = StandardCharsets.UTF_8.encode(msg.login());
-                var sizeLogin = login.remaining();
-                var content = StandardCharsets.UTF_8.encode(msg.texte());
-                var sizeContent = content.remaining();
-                var size = sizeLogin + sizeContent + 2*Integer.BYTES;
-
-
-
-                if(size > 1024)
-                    throw new IllegalStateException();
-                if(size > bufferOut.remaining()){
-                    return;
-                }
-                bufferOut.putInt(sizeLogin);
-                bufferOut.put(login);
-                bufferOut.putInt(sizeContent);
-                bufferOut.put(content);
-                queue.pop();
-                updateInterestOps();
-
-            }
-        }
-
-        /**
-         * Update the interestOps of the key looking only at values of the boolean
-         * closed and of both ByteBuffers.
-         *
-         * The convention is that both buffers are in write-mode before the call to
-         * updateInterestOps and after the call. Also it is assumed that process has
-         * been be called just before updateInterestOps.
-         */
-
-        private void updateInterestOps() {
-            int interestOps = 0;
-            if(!closed && bufferIn.hasRemaining()){
-                interestOps |= SelectionKey.OP_READ;
-            }
-            if(bufferOut.position() != 0){
-                interestOps |= SelectionKey.OP_WRITE;
-            }
-            if(interestOps == 0){
-                silentlyClose();
-                return;
-            }
-            key.interestOps(interestOps);
-        }
-
-        private void silentlyClose() {
-            try {
-                sc.close();
-            } catch (IOException e) {
-                // ignore exception
-            }
-        }
-
-        /**
-         * Performs the read action on sc
-         *
-         * The convention is that both buffers are in write-mode before the call to
-         * doRead and after the call
-         *
-         * @throws IOException
-         */
-        private void doRead() throws IOException {
-            if (sc.read(bufferIn) == -1)
-                closed = true;
-            processIn();
-            updateInterestOps();
-        }
-
-        /**
-         * Performs the write action on sc
-         *
-         * The convention is that both buffers are in write-mode before the call to
-         * doWrite and after the call
-         *
-         * @throws IOException
-         */
-
-        private void doWrite() throws IOException {
-            bufferOut.flip();
-            sc.write(bufferOut);
-            bufferOut.compact();
-            processOut();
-            updateInterestOps();
-        }
-
-        public void doConnect() throws IOException {
-            // TODO
-            if(!sc.finishConnect()){
-                return;
-            }
-            key.interestOps(SelectionKey.OP_READ);
-        }
-    }
-
     static private int BUFFER_SIZE = 10_000;
-    static private Logger logger = Logger.getLogger(Client.class.getName());
+    static private final Logger logger = Logger.getLogger(Client.class.getName());
 
     private final SocketChannel sc;
     private final Selector selector;
+    private final Path path;
     private final InetSocketAddress serverAddress;
     private final String login;
     private final Thread console;
@@ -193,7 +40,8 @@ public class Client {
     private final ArrayDeque<Message> queue = new ArrayDeque<>();
 
 
-    public Client(String login, InetSocketAddress serverAddress) throws IOException {
+    public Client(InetSocketAddress serverAddress, Path path, String login) throws IOException {
+        this.path = path;
         this.serverAddress = serverAddress;
         this.login = login;
         this.sc = SocketChannel.open();
@@ -239,12 +87,12 @@ public class Client {
      */
 
     private void processCommands() {
-        // TODO
         synchronized (queue){
             while(!queue.isEmpty())
                 uniqueContext.queueMessage(queue.poll());
         }
     }
+
 
     public void launch() throws IOException {
         sc.configureBlocking(false);
@@ -253,8 +101,8 @@ public class Client {
         key.attach(uniqueContext);
         sc.connect(serverAddress);
 
-        console.start();
 
+        console.start();
         while (!Thread.interrupted()) {
             try {
                 selector.select(this::treatKey);
@@ -268,7 +116,7 @@ public class Client {
     private void treatKey(SelectionKey key) {
         try {
             if (key.isValid() && key.isConnectable()) {
-                uniqueContext.doConnect();
+                uniqueContext.doConnect(login);
             }
             if (key.isValid() && key.isWritable()) {
                 uniqueContext.doWrite();
@@ -292,14 +140,14 @@ public class Client {
     }
 
     public static void main(String[] args) throws NumberFormatException, IOException {
-        if (args.length != 3) {
+        if (args.length != 4) {
             usage();
             return;
         }
-        new Client(args[0], new InetSocketAddress(args[1], Integer.parseInt(args[2]))).launch();
+        new Client(new InetSocketAddress(args[0], Integer.parseInt(args[1])), Path.of(args[2]), args[3]).launch();
     }
 
     private static void usage() {
-        System.out.println("Usage : ClientChat login hostname port");
+        System.out.println("Usage : Client hostname port path login");
     }
 }
