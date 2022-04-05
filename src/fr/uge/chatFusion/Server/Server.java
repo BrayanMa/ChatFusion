@@ -12,6 +12,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -24,11 +26,13 @@ public class Server {
 
     private final ServerSocketChannel serverSocketChannel;
     private final Selector selector;
+    private final Map<SocketChannel, String> clients;
 
     public Server(int port) throws IOException {
         serverSocketChannel = ServerSocketChannel.open();
         serverSocketChannel.bind(new InetSocketAddress(port));
         selector = Selector.open();
+        this.clients = new HashMap<>();
     }
 
     public void launch() throws IOException {
@@ -80,7 +84,7 @@ public class Server {
         key1.attach(new ContextServer(this, key1));
     }
 
-    private void silentlyClose(SelectionKey key) {
+    public void silentlyClose(SelectionKey key) {
         Channel sc = (Channel) key.channel();
         try {
             sc.close();
@@ -100,6 +104,15 @@ public class Server {
             if(Objects.isNull(c))
                 continue;
             c.queueMessage(msg);
+        }
+    }
+
+    public boolean register(String login, SocketChannel sc){
+        if(clients.containsValue(login)){
+            return false;
+        } else {
+            clients.put(sc, login);
+            return true;
         }
     }
 

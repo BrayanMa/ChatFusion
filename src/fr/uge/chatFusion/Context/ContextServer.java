@@ -60,25 +60,41 @@ public class ContextServer {
             }
         }
     }*/
-
     private void processInMessage() {
 
-            Reader.ProcessStatus status = connexionReader.process(bufferIn);
+        Reader.ProcessStatus status = connexionReader.process(bufferIn);
 
-            // Reader.ProcessStatus status = messageReader.process(bufferIn);
-            switch (status) {
-                case DONE:
-                    var value = connexionReader.get();
-                    System.out.println("Bienvenue " + value);
-                    //server.broadcast(value);
-                    messageReader.reset();
-                    break;
-                case REFILL:
-                    return;
-                case ERROR:
-                    silentlyClose();
-            }
+        // Reader.ProcessStatus status = messageReader.process(bufferIn);
+        switch (status) {
+            case DONE:
+                var value = connexionReader.get();
+                verifyConnection(value);                    //server.broadcast(value);
+                connexionReader.reset();
+                break;
+            case REFILL:
+                return;
+            case ERROR:
+                silentlyClose();
+        }
+    }
 
+    private void sendConnect(boolean condition) {
+        bufferOut.clear();
+        if (condition)
+            bufferOut.putInt(7);
+        else
+            bufferOut.putInt(8);
+
+        updateInterestOps();
+    }
+
+    private void verifyConnection(String login) {
+        if (server.register(login, sc)) {
+            sendConnect(true);
+        } else {
+            sendConnect(false);
+            //silentlyClose();
+        }
     }
 
     private void processIn() {
@@ -88,8 +104,10 @@ public class ContextServer {
             switch (status) {
                 case DONE:
                     var opCode = opReader.get();
-                    switch (opCode){
-                        case 0 -> {processInMessage();}
+                    switch (opCode) {
+                        case 0 -> {
+                            processInMessage();
+                        }
                     }
                     opReader.reset();
                     break;

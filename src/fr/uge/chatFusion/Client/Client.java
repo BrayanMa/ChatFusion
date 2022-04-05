@@ -1,14 +1,11 @@
 package fr.uge.chatFusion.Client;
 
-import fr.uge.chatFusion.Context.Context;
-import fr.uge.chatFusion.Reader.MessageReader;
-import fr.uge.chatFusion.Reader.Reader;
+import fr.uge.chatFusion.Context.ContextClient;
 import fr.uge.chatFusion.Utils.Message;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.channels.Channel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -16,12 +13,7 @@ import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
-import java.util.Objects;
-import java.util.Queue;
 import java.util.Scanner;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.BlockingQueue;
 import java.util.logging.Logger;
 
 
@@ -36,7 +28,7 @@ public class Client {
     private final InetSocketAddress serverAddress;
     private final String login;
     private final Thread console;
-    private Context uniqueContext;
+    private ContextClient uniqueContext;
     private final ArrayDeque<Message> queue = new ArrayDeque<>();
 
 
@@ -97,7 +89,7 @@ public class Client {
     public void launch() throws IOException {
         sc.configureBlocking(false);
         var key = sc.register(selector, SelectionKey.OP_CONNECT);
-        uniqueContext = new Context(key);
+        uniqueContext = new ContextClient(key, logger);
         key.attach(uniqueContext);
         sc.connect(serverAddress);
 
