@@ -41,11 +41,11 @@ public class ContextServer {
      * The convention is that bufferIn is in write-mode before the call to process and
      * after the call
      */
-    /*private void processIn() {
+    private void processInMessage() {
         for (; ; ) {
             Reader.ProcessStatus status = messageReader.process(bufferIn);
 
-           // Reader.ProcessStatus status = messageReader.process(bufferIn);
+            // Reader.ProcessStatus status = messageReader.process(bufferIn);
             switch (status) {
                 case DONE:
                     var value = messageReader.get();
@@ -59,8 +59,9 @@ public class ContextServer {
                     return;
             }
         }
-    }*/
-    private void processInMessage() {
+    }
+
+    private void processInConnexion() {
 
         Reader.ProcessStatus status = connexionReader.process(bufferIn);
 
@@ -105,9 +106,8 @@ public class ContextServer {
                 case DONE:
                     var opCode = opReader.get();
                     switch (opCode) {
-                        case 0 -> {
-                            processInMessage();
-                        }
+                        case 0 -> processInConnexion();
+                        case 2 -> processInMessage();
                     }
                     opReader.reset();
                     break;
@@ -129,7 +129,8 @@ public class ContextServer {
         var nickname = StandardCharsets.UTF_8.encode(msg.login());
         var content = StandardCharsets.UTF_8.encode(msg.texte());
 
-        var buffer = ByteBuffer.allocate(2 * Integer.BYTES + nickname.remaining() + content.remaining());
+        var buffer = ByteBuffer.allocate(3 * Integer.BYTES + nickname.remaining() + content.remaining());
+        buffer.putInt(2);
         buffer.putInt(nickname.remaining());
         buffer.put(nickname);
         buffer.putInt(content.remaining());

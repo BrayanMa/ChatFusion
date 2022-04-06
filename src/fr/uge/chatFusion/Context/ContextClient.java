@@ -75,9 +75,11 @@ public class ContextClient {
                     var opCode = opReader.get();
                     switch (opCode){
                         case 7 -> logger.info("Connection établie");
-                        case 8 -> {logger.warning("Erreur de connection");
-                        silentlyClose();
+                        case 8 -> {
+                            logger.warning("Erreur de connection");
+                            silentlyClose();
                         }
+                        case 2 -> processInMessage();
                     }
                     opReader.reset();
                     break;
@@ -114,7 +116,7 @@ public class ContextClient {
             var sizeLogin = login.remaining();
             var content = StandardCharsets.UTF_8.encode(msg.texte());
             var sizeContent = content.remaining();
-            var size = sizeLogin + sizeContent + 2 * Integer.BYTES;
+            var size = sizeLogin + sizeContent + 3 * Integer.BYTES;
 
 
             if (size > 1024)
@@ -122,6 +124,7 @@ public class ContextClient {
             if (size > bufferOut.remaining()) {
                 return;
             }
+            bufferOut.putInt(2);
             bufferOut.putInt(sizeLogin);
             bufferOut.put(login);
             bufferOut.putInt(sizeContent);

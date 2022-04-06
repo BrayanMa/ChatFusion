@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public class Server {
 
@@ -50,14 +51,24 @@ public class Server {
         }
     }
 
+    private void updateClients(){
+        for(var sc : clients.keySet()){
+            var tmp = selector.keys().stream().map(x -> (Channel) x.channel()).toList();
+            if(!tmp.contains(sc))
+                clients.remove(sc);
+        }
+    }
+
     private void treatKey(SelectionKey key) {
         Helpers.printSelectedKey(key); // for debug
+        updateClients();
         try {
             if (key.isValid() && key.isAcceptable()) {
                 doAccept(key);
             }
         } catch (IOException ioe) {
             // lambda call in select requires to tunnel IOException
+            System.out.println("fin");
             throw new UncheckedIOException(ioe);
         }
         try {
@@ -69,6 +80,8 @@ public class Server {
             }
         } catch (IOException e) {
             logger.log(Level.INFO, "Connection closed with client due to IOException", e);
+            System.out.println("fin");
+
             silentlyClose(key);
         }
     }
