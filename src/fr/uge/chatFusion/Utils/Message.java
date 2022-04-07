@@ -1,4 +1,10 @@
 package fr.uge.chatFusion.Utils;
 
-public record Message(String login, String texte) {
+import java.nio.ByteBuffer;
+
+public interface Message {
+
+	public String login();
+	public String msg();
+	public void encode(ByteBuffer bufferOut);
 }

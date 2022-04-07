@@ -1,16 +1,16 @@
 package fr.uge.chatFusion.Reader;
 
-import fr.uge.chatFusion.Utils.Message;
+import fr.uge.chatFusion.Utils.MessagePublique;
 
 import java.nio.ByteBuffer;
 
-public class MessageReader implements Reader<Message> {
+public class MessageReader implements Reader<MessagePublique> {
 
     private State state = State.WAITING;
     private final StringReader stringReader = new StringReader();
     private String login;
     private String texte;
-    private Message message;
+    private MessagePublique message;
 
 
     @Override
@@ -30,12 +30,12 @@ public class MessageReader implements Reader<Message> {
         }
         texte = stringReader.get();
         state = State.DONE;
-        message = new Message(login, texte);
+        message = new MessagePublique(login, texte);
         return ProcessStatus.DONE;
     }
 
     @Override
-    public Message get() {
+    public MessagePublique get() {
         if (state != State.DONE) {
             throw new IllegalStateException();
         }

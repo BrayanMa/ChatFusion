@@ -1,6 +1,6 @@
 package fr.uge.chatFusion.Reader;
 
-import fr.uge.chatFusion.Utils.Message;
+import fr.uge.chatFusion.Utils.MessagePublique;
 import fr.uge.chatFusion.Utils.MessagePrivate;
 
 import java.nio.ByteBuffer;
@@ -26,14 +26,13 @@ public class PrivateMessageReader implements Reader<MessagePrivate> {
         }
         loginDest = stringReader.get();
         stringReader.reset();
-
         var servDestState = stringReader.process(bb);
         if (servDestState != ProcessStatus.DONE) {
             return servDestState;
         }
         servDest = stringReader.get();
-        state = State.DONE;
-
+        stringReader.reset();
+        
         var loginState = stringReader.process(bb);
         if (loginState != ProcessStatus.DONE) {
             return loginState;
