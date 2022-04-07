@@ -12,10 +12,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayDeque;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -28,22 +25,78 @@ public class Server {
 	private final ServerSocketChannel serverSocketChannel;
 	private final Selector selector;
 	private final Map<SocketChannel, String> clients;
+	private final List<InetSocketAddress> servers;
+	private ServerSocketChannel leader;
+	private final Thread console;
+	private final ArrayDeque<String> queue = new ArrayDeque<>();
 
 	public Server(int port) throws IOException {
 		serverSocketChannel = ServerSocketChannel.open();
 		serverSocketChannel.bind(new InetSocketAddress(port));
 		selector = Selector.open();
 		this.clients = new HashMap<>();
+		this.leader = serverSocketChannel;
+		this.servers = new ArrayList<>();
+		console = new Thread(this::consoleServerRun);
+		console.setDaemon(true);
+	}
+
+	private void consoleServerRun(){
+		try (var scanner = new Scanner(System.in)){
+			while (scanner.hasNextLine()){
+				var msg = scanner.nextLine();
+				sendCommand(msg);
+			}
+		}
+		logger.log(Level.INFO, "Console thread stopping");
+	}
+
+	private void sendCommand(String command){
+		synchronized (queue){
+			queue.addLast(command);
+			selector.wakeup();
+		}
+	}
+
+	private void processAskFusion(String ipAdress, int port) {
+		var newSc = new InetSocketAddress(ipAdress, port);
+
+	}
+
+	private void processCommands(){
+		synchronized (queue){
+			while (!queue.isEmpty()){
+				var msg = queue.poll();
+				var tmp = msg.split(" ");
+				if(tmp.length != 3){
+					logger.warning("Erreur de commande");
+					break;
+				}
+				if (!"FUSION".equals(tmp[0])) {
+					logger.warning("Commande pas supportée");
+					break;
+				}
+				System.out.println("Tentative de Fusion");
+				/*if(Integer.parseInt(tmp[2]) < 1024 || Integer.parseInt(tmp[2]) >49151){
+					logger.warning("Port invalide");
+				}*/
+
+				processAskFusion(tmp[1], Integer.parseInt(tmp[2]));
+
+			}
+		}
 	}
 
 	public void launch() throws IOException {
 		serverSocketChannel.configureBlocking(false);
 		serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
+		console.start();
 		while (!Thread.interrupted()) {
 			Helpers.printKeys(selector); // for debug
 			System.out.println("Starting select");
 			try {
 				selector.select(this::treatKey);
+				processCommands();
 			} catch (UncheckedIOException tunneled) {
 				throw tunneled.getCause();
 			}
@@ -66,7 +119,6 @@ public class Server {
 		synchronized (clients) {
 			updateClients();
 		}
-		
 		try {
 			if (key.isValid() && key.isAcceptable()) {
 				doAccept(key);
