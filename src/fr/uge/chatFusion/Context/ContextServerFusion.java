@@ -1,10 +1,8 @@
 package fr.uge.chatFusion.Context;
 
-import fr.uge.chatFusion.Reader.MessageReader;
+import fr.uge.chatFusion.Reader.Message.MessageReader;
+import fr.uge.chatFusion.Reader.Message.PrivateMessageReader;
 import fr.uge.chatFusion.Reader.OpReader;
-import fr.uge.chatFusion.Reader.PrivateMessageReader;
-import fr.uge.chatFusion.Reader.Reader;
-import fr.uge.chatFusion.Server.Server;
 import fr.uge.chatFusion.Utils.Message;
 
 import java.io.IOException;
@@ -14,7 +12,6 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
-import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -47,7 +44,7 @@ public class ContextServerFusion implements InterfaceContexteServ {
         bufferOut.putInt(nameServ.length());
         bufferOut.put(StandardCharsets.UTF_8.encode(nameServ));
         bufferOut.putInt(servers.size());
-        for(var entry : servers.entrySet()){
+        for (var entry : servers.entrySet()) {
             bufferOut.putInt(entry.getValue().length());
             bufferOut.put(StandardCharsets.UTF_8.encode(entry.getValue()));
             bufferOut.putInt(entry.getKey().getAddress().getAddress().length);
@@ -56,13 +53,6 @@ public class ContextServerFusion implements InterfaceContexteServ {
         doWrite();
     }
 
-
-    /**
-     * Process the content of bufferIn
-     * <p>
-     * The convention is that bufferIn is in write-mode before the call to process
-     * and after the call
-     */
     /*private void processIn() {
         for (;;) {
             Reader.ProcessStatus status = opReader.process(bufferIn);
@@ -90,12 +80,6 @@ public class ContextServerFusion implements InterfaceContexteServ {
         }
     }*/
 
-    /**
-     * Add a message to the message queue, tries to fill bufferOut and
-     * updateInterestOps
-     *
-     * @param msg
-     */
    /* public void queueMessage(Message msg) {
         // TODO
         queue.add(msg);
@@ -103,9 +87,6 @@ public class ContextServerFusion implements InterfaceContexteServ {
         updateInterestOps();
     }*/
 
-    /**
-     * Try to fill bufferOut from the message queue
-     */
     private void processOut() {
 
         updateInterestOps();
@@ -144,14 +125,6 @@ public class ContextServerFusion implements InterfaceContexteServ {
         }
     }
 
-    /**
-     * Performs the read action on sc
-     * <p>
-     * The convention is that both buffers are in write-mode before the call to
-     * doRead and after the call
-     *
-     * @throws IOException
-     */
     @Override
     public void doRead() throws IOException {
         if (sc.read(bufferIn) == -1)
@@ -160,15 +133,7 @@ public class ContextServerFusion implements InterfaceContexteServ {
         updateInterestOps();
     }
 
-    /**
-     * Performs the write action on sc
-     * <p>
-     * The convention is that both buffers are in write-mode before the call to
-     * doWrite and after the call
-     *
-     * @throws IOException
-     */
-@Override
+    @Override
     public void doWrite() throws IOException {
         bufferOut.flip();
         sc.write(bufferOut);
@@ -178,7 +143,6 @@ public class ContextServerFusion implements InterfaceContexteServ {
     }
 
     public void doConnect(String nameServ, Map<InetSocketAddress, String> servers) throws IOException {
-        // TODO
         if (!sc.finishConnect()) {
             return;
         }

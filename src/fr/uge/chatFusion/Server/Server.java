@@ -1,24 +1,18 @@
 package fr.uge.chatFusion.Server;
 
-import fr.uge.chatFusion.Context.ContextClient;
 import fr.uge.chatFusion.Context.ContextServer;
 import fr.uge.chatFusion.Context.ContextServerFusion;
 import fr.uge.chatFusion.Context.InterfaceContexteServ;
-import fr.uge.chatFusion.Reader.MessageReader;
-import fr.uge.chatFusion.Reader.Reader;
 import fr.uge.chatFusion.Utils.MessagePrivate;
 import fr.uge.chatFusion.Utils.MessagePublique;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.channels.*;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 
 public class Server {
 
@@ -29,7 +23,6 @@ public class Server {
 	private ContextServerFusion uniqueContext;
 	//private final Selector selectorServers;
 
-
 	private final ServerSocketChannel serverSocketChannel;
 	private final Selector selector;
 	private final Map<SocketChannel, String> clients;
@@ -37,8 +30,9 @@ public class Server {
 	private ServerSocketChannel leader;
 	private final Thread console;
 	private final ArrayDeque<String> queue = new ArrayDeque<>();
+	private final String name;
 
-	public Server(int port) throws IOException {
+	public Server(int port, String name) throws IOException {
 		serverSocketChannel = ServerSocketChannel.open();
 		serverSocketChannel.bind(new InetSocketAddress(port));
 		selector = Selector.open();
@@ -48,6 +42,7 @@ public class Server {
 		this.servers = new HashMap<>();
 		console = new Thread(this::consoleServerRun);
 		console.setDaemon(true);
+		this.name = name;
 
 		this.sc = SocketChannel.open();
 
@@ -147,7 +142,7 @@ public class Server {
 	private void treatKeyClient(SelectionKey key) {
 		try {
 			if (key.isValid() && key.isConnectable()) {
-				uniqueContext.doConnect("aze",servers);
+				uniqueContext.doConnect(name, servers);
 			}
 			if (key.isValid() && key.isWritable()) {
 				uniqueContext.doWrite();
@@ -202,7 +197,7 @@ public class Server {
 	}
 
 	public void silentlyClose(SelectionKey key) {
-		Channel sc = (Channel) key.channel();
+		Channel sc = key.channel();
 		try {
 			sc.close();
 		} catch (IOException e) {
@@ -210,11 +205,6 @@ public class Server {
 		}
 	}
 
-	/**
-	 * Add a message to all connected clients queue
-	 *
-	 * @param msg
-	 */
 	public void broadcast(MessagePublique msg, SelectionKey k) {
 		for (var key : selector.keys()) {
 			// ATTENTION
@@ -238,15 +228,15 @@ public class Server {
 	}
 
 	public static void main(String[] args) throws NumberFormatException, IOException {
-		if (args.length != 1) {
+		if (args.length != 2) {
 			usage();
 			return;
 		}
-		new Server(Integer.parseInt(args[0])).launch();
+		new Server(Integer.parseInt(args[0]), args[1]).launch();
 	}
 
 	private static void usage() {
-		System.out.println("Usage : Server port");
+		System.out.println("Usage : Server port name");
 	}
 
 	public void sendPrivateMessage(MessagePrivate value, SelectionKey k) {

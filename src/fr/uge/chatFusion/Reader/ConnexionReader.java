@@ -1,5 +1,7 @@
 package fr.uge.chatFusion.Reader;
 
+import fr.uge.chatFusion.Reader.Primitive.StringReader;
+
 import java.nio.ByteBuffer;
 
 public class ConnexionReader implements Reader<String>{

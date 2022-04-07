@@ -66,12 +66,6 @@ public class Client {
         }
     }
 
-    /**
-     * Send instructions to the selector via a BlockingQueue and wake it up
-     *
-     * @param msg
-     * @throws InterruptedException
-     */
 
     private void sendCommand(String msg) throws InterruptedException {
         if (StandardCharsets.UTF_8.encode(msg).remaining() > BUFFER_SIZE) {

@@ -1,10 +1,9 @@
 package fr.uge.chatFusion.Context;
 
-import fr.uge.chatFusion.Reader.MessageReader;
+import fr.uge.chatFusion.Reader.Message.MessageReader;
 import fr.uge.chatFusion.Reader.OpReader;
-import fr.uge.chatFusion.Reader.PrivateMessageReader;
+import fr.uge.chatFusion.Reader.Message.PrivateMessageReader;
 import fr.uge.chatFusion.Reader.Reader;
-import fr.uge.chatFusion.Utils.MessagePublique;
 import fr.uge.chatFusion.Utils.Message;
 
 import java.io.IOException;
@@ -115,14 +114,7 @@ public class ContextClient {
 		}
 	}
 
-	/**
-	 * Add a message to the message queue, tries to fill bufferOut and
-	 * updateInterestOps
-	 *
-	 * @param msg
-	 */
 	public void queueMessage(Message msg) {
-		// TODO
 		queue.add(msg);
 		processOut();
 		updateInterestOps();
@@ -132,7 +124,6 @@ public class ContextClient {
 	 * Try to fill bufferOut from the message queue
 	 */
 	private void processOut() {
-		// TODO
 		while (!queue.isEmpty()) {
 			var msg = queue.peek();
 			// var size = msg.login().length() + msg.texte().length() + 2 * Integer.BYTES;
@@ -176,14 +167,6 @@ public class ContextClient {
 		}
 	}
 
-	/**
-	 * Performs the read action on sc
-	 * <p>
-	 * The convention is that both buffers are in write-mode before the call to
-	 * doRead and after the call
-	 *
-	 * @throws IOException
-	 */
 	public void doRead() throws IOException {
 		if (sc.read(bufferIn) == -1)
 			closed = true;
@@ -191,14 +174,6 @@ public class ContextClient {
 		updateInterestOps();
 	}
 
-	/**
-	 * Performs the write action on sc
-	 * <p>
-	 * The convention is that both buffers are in write-mode before the call to
-	 * doWrite and after the call
-	 *
-	 * @throws IOException
-	 */
 
 	public void doWrite() throws IOException {
 		bufferOut.flip();

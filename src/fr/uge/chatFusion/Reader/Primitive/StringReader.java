@@ -1,9 +1,12 @@
-package fr.uge.chatFusion.Reader;
+package fr.uge.chatFusion.Reader.Primitive;
+
+import fr.uge.chatFusion.Reader.Primitive.IntReader;
+import fr.uge.chatFusion.Reader.Reader;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
-public class StringReader implements Reader<String>{
+public class StringReader implements Reader<String> {
 
     private enum State {DONE, WAITING, ERROR};
 

@@ -1,6 +1,8 @@
 package fr.uge.chatFusion.Reader;
 
 
+import fr.uge.chatFusion.Reader.Primitive.ByteReader;
+
 import java.nio.ByteBuffer;
 
 public class OpReader implements Reader<Byte>{

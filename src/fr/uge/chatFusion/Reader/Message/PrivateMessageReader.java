@@ -1,6 +1,8 @@
-package fr.uge.chatFusion.Reader;
+package fr.uge.chatFusion.Reader.Message;
 
-import fr.uge.chatFusion.Utils.MessagePublique;
+import fr.uge.chatFusion.Reader.Primitive.StringReader;
+import fr.uge.chatFusion.Reader.Reader;
+import fr.uge.chatFusion.Reader.State;
 import fr.uge.chatFusion.Utils.MessagePrivate;
 
 import java.nio.ByteBuffer;

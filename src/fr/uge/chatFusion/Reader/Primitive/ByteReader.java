@@ -1,4 +1,7 @@
-package fr.uge.chatFusion.Reader;
+package fr.uge.chatFusion.Reader.Primitive;
+
+import fr.uge.chatFusion.Reader.Reader;
+import fr.uge.chatFusion.Reader.State;
 
 import java.nio.ByteBuffer;
 
