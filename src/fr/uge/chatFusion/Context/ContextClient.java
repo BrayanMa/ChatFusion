@@ -70,7 +70,7 @@ public class ContextClient {
 			switch (status) {
 			case DONE:
 				var value = privateMessageReader.get();
-				System.out.println(value.login() + " \n\t↳ " + value.msg());
+				System.out.println("Private message from : " + value.login() + " \n\t↳ " + value.msg());
 				privateMessageReader.reset();
 				break;
 			case REFILL:

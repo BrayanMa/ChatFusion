@@ -17,7 +17,7 @@ import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 
-public class ContextServer {
+public class ContextServer implements InterfaceContexteServ {
 	static private int BUFFER_SIZE = 10_000;
 
 	private final SelectionKey key;
@@ -134,6 +134,7 @@ public class ContextServer {
 				case 0 -> processInConnexion();
 				case 2 -> processInMessage();
 				case 3 -> processInPrivateMessage();
+				case 5 -> System.out.println("Tentative de fusion recu");
 				}
 				opReader.reset();
 				break;
@@ -224,6 +225,7 @@ public class ContextServer {
 	 *
 	 * @throws IOException
 	 */
+	@Override
 	public void doRead() throws IOException {
 		if (-1 == sc.read(bufferIn)) {
 			closed = true;
@@ -240,7 +242,7 @@ public class ContextServer {
 	 *
 	 * @throws IOException
 	 */
-
+@Override
 	public void doWrite() throws IOException {
 		bufferOut.flip();
 		sc.write(bufferOut);
@@ -249,6 +251,7 @@ public class ContextServer {
 		updateInterestOps();
 	}
 
+	@Override
 	public void sendUserNotFound(MessagePrivate msg) {
 
 		var log = StandardCharsets.UTF_8.encode(msg.login());
@@ -266,5 +269,4 @@ public class ContextServer {
 		processOut();
 		updateInterestOps();
 	}
-
 }

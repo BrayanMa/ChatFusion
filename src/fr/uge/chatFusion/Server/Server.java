@@ -1,6 +1,9 @@
 package fr.uge.chatFusion.Server;
 
+import fr.uge.chatFusion.Context.ContextClient;
 import fr.uge.chatFusion.Context.ContextServer;
+import fr.uge.chatFusion.Context.ContextServerFusion;
+import fr.uge.chatFusion.Context.InterfaceContexteServ;
 import fr.uge.chatFusion.Reader.MessageReader;
 import fr.uge.chatFusion.Reader.Reader;
 import fr.uge.chatFusion.Utils.MessagePrivate;
@@ -22,10 +25,15 @@ public class Server {
 	private static final int BUFFER_SIZE = 1_024;
 	private static final Logger logger = Logger.getLogger(Server.class.getName());
 
+	private final SocketChannel sc;
+	private ContextServerFusion uniqueContext;
+	//private final Selector selectorServers;
+
+
 	private final ServerSocketChannel serverSocketChannel;
 	private final Selector selector;
 	private final Map<SocketChannel, String> clients;
-	private final List<InetSocketAddress> servers;
+	private final Map<InetSocketAddress, String> servers;
 	private ServerSocketChannel leader;
 	private final Thread console;
 	private final ArrayDeque<String> queue = new ArrayDeque<>();
@@ -34,11 +42,15 @@ public class Server {
 		serverSocketChannel = ServerSocketChannel.open();
 		serverSocketChannel.bind(new InetSocketAddress(port));
 		selector = Selector.open();
+		//selectorServers = Selector.open();
 		this.clients = new HashMap<>();
 		this.leader = serverSocketChannel;
-		this.servers = new ArrayList<>();
+		this.servers = new HashMap<>();
 		console = new Thread(this::consoleServerRun);
 		console.setDaemon(true);
+
+		this.sc = SocketChannel.open();
+
 	}
 
 	private void consoleServerRun(){
@@ -58,8 +70,22 @@ public class Server {
 		}
 	}
 
-	private void processAskFusion(String ipAdress, int port) {
+	private void processAskFusion(String ipAdress, int port) throws IOException {
 		var newSc = new InetSocketAddress(ipAdress, port);
+		sc.configureBlocking(false);
+		var key = sc.register(selector, SelectionKey.OP_CONNECT);
+		uniqueContext = new ContextServerFusion(key, logger);
+		key.attach(uniqueContext);
+		sc.connect(newSc);
+
+		/*while (!Thread.interrupted()) {
+			try {
+				selector.select(this::treatKey);
+				processCommands();
+			} catch (UncheckedIOException tunneled) {
+				throw tunneled.getCause();
+			}
+		}*/
 
 	}
 
@@ -81,7 +107,11 @@ public class Server {
 					logger.warning("Port invalide");
 				}*/
 
-				processAskFusion(tmp[1], Integer.parseInt(tmp[2]));
+				try {
+					processAskFusion(tmp[1], Integer.parseInt(tmp[2]));
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
 
 			}
 		}
@@ -95,8 +125,10 @@ public class Server {
 			Helpers.printKeys(selector); // for debug
 			System.out.println("Starting select");
 			try {
+				//selectorServers.select(this::treatKeyClient);
 				selector.select(this::treatKey);
 				processCommands();
+				updateClients();
 			} catch (UncheckedIOException tunneled) {
 				throw tunneled.getCause();
 			}
@@ -105,23 +137,38 @@ public class Server {
 	}
 
 	private void updateClients() {
-		synchronized (clients) {
-			for (var sc : clients.keySet()) {
-				var tmp = selector.keys().stream().map(x -> (Channel) x.channel()).toList();
-				if (!tmp.contains(sc))
-					clients.remove(sc);
+		for(var key : selector.keys()) {
+			if(!key.isValid()) {
+				clients.remove(key.channel());
 			}
+		}
+	}
+
+	private void treatKeyClient(SelectionKey key) {
+		try {
+			if (key.isValid() && key.isConnectable()) {
+				uniqueContext.doConnect("aze",servers);
+			}
+			if (key.isValid() && key.isWritable()) {
+				uniqueContext.doWrite();
+			}
+			if (key.isValid() && key.isReadable()) {
+				uniqueContext.doRead();
+			}
+		} catch (IOException ioe) {
+			// lambda call in select requires to tunnel IOException
+			throw new UncheckedIOException(ioe);
 		}
 	}
 
 	private void treatKey(SelectionKey key) {
 		Helpers.printSelectedKey(key); // for debug
-		synchronized (clients) {
-			updateClients();
-		}
 		try {
 			if (key.isValid() && key.isAcceptable()) {
 				doAccept(key);
+			}
+			if (key.isValid() && key.isConnectable()) {
+				uniqueContext.doConnect("aze",servers);
 			}
 		} catch (IOException ioe) {
 			// lambda call in select requires to tunnel IOException
@@ -130,10 +177,10 @@ public class Server {
 		}
 		try {
 			if (key.isValid() && key.isWritable()) {
-				((ContextServer) key.attachment()).doWrite();
+				((InterfaceContexteServ) key.attachment()).doWrite();
 			}
 			if (key.isValid() && key.isReadable()) {
-				((ContextServer) key.attachment()).doRead();
+				((InterfaceContexteServ) key.attachment()).doRead();
 			}
 		} catch (IOException e) {
 			logger.log(Level.INFO, "Connection closed with client due to IOException", e);
@@ -170,6 +217,7 @@ public class Server {
 	 */
 	public void broadcast(MessagePublique msg, SelectionKey k) {
 		for (var key : selector.keys()) {
+			// ATTENTION
 			ContextServer c = (ContextServer) key.attachment();
 			if (Objects.isNull(c))
 				continue;
@@ -210,7 +258,7 @@ public class Server {
 				return;
 			}
 		}
-		ContextServer c = (ContextServer) k.attachment();
+		var c = (InterfaceContexteServ) k.attachment();
 		c.sendUserNotFound(value);
 		System.out.println("pas trouvé");
 	}
