@@ -2,6 +2,8 @@ package fr.uge.chatFusion.Client;
 
 import fr.uge.chatFusion.Context.ContextClient;
 import fr.uge.chatFusion.Utils.Message;
+import fr.uge.chatFusion.Utils.MessagePrivate;
+import fr.uge.chatFusion.Utils.MessagePublique;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -16,21 +18,18 @@ import java.util.ArrayDeque;
 import java.util.Scanner;
 import java.util.logging.Logger;
 
-
 public class Client {
 
-    static private int BUFFER_SIZE = 10_000;
     static private final Logger logger = Logger.getLogger(Client.class.getName());
-
+    static private int BUFFER_SIZE = 10_000;
     private final SocketChannel sc;
     private final Selector selector;
     private final Path path;
     private final InetSocketAddress serverAddress;
     private final String login;
     private final Thread console;
-    private ContextClient uniqueContext;
     private final ArrayDeque<Message> queue = new ArrayDeque<>();
-
+    private ContextClient uniqueContext;
 
     public Client(InetSocketAddress serverAddress, Path path, String login) throws IOException {
         this.path = path;
@@ -39,6 +38,18 @@ public class Client {
         this.sc = SocketChannel.open();
         this.selector = Selector.open();
         this.console = new Thread(this::consoleRun);
+    }
+
+    public static void main(String[] args) throws NumberFormatException, IOException {
+        if (args.length != 4) {
+            usage();
+            return;
+        }
+        new Client(new InetSocketAddress(args[0], Integer.parseInt(args[1])), Path.of(args[2]), args[3]).launch();
+    }
+
+    private static void usage() {
+        System.out.println("Usage : Client hostname port path login");
     }
 
     private void consoleRun() {
@@ -68,10 +79,26 @@ public class Client {
             return;
         }
         synchronized (queue) {
-            queue.addLast(new Message(login, msg));
+            if (msg.length() <= 0) {
+                return;
+            }
+            switch (msg.charAt(0)) {
+                case '/':
+                    break;
+                case '@':
+                    if (!msg.matches("@.*:.*")) {
+                        break;
+                    }
+                    var tab1 = msg.split(":");
+                    var tab2 = tab1[1].split(" ", 2);
+                    queue.addLast(new MessagePrivate(tab1[0].replace("@", ""), tab2[0], login, tab2[1]));
+
+                    break;
+                default:
+                    queue.addLast(new MessagePublique(login, msg));
+            }
             selector.wakeup();
         }
-
     }
 
     /**
@@ -79,12 +106,11 @@ public class Client {
      */
 
     private void processCommands() {
-        synchronized (queue){
-            while(!queue.isEmpty())
+        synchronized (queue) {
+            while (!queue.isEmpty())
                 uniqueContext.queueMessage(queue.poll());
         }
     }
-
 
     public void launch() throws IOException {
         sc.configureBlocking(false);
@@ -92,7 +118,6 @@ public class Client {
         uniqueContext = new ContextClient(key, logger);
         key.attach(uniqueContext);
         sc.connect(serverAddress);
-
 
         console.start();
         while (!Thread.interrupted()) {
@@ -129,17 +154,5 @@ public class Client {
         } catch (IOException e) {
             // ignore exception
         }
-    }
-
-    public static void main(String[] args) throws NumberFormatException, IOException {
-        if (args.length != 4) {
-            usage();
-            return;
-        }
-        new Client(new InetSocketAddress(args[0], Integer.parseInt(args[1])), Path.of(args[2]), args[3]).launch();
-    }
-
-    private static void usage() {
-        System.out.println("Usage : Client hostname port path login");
     }
 }
