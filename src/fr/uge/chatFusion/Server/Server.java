@@ -3,6 +3,7 @@ package fr.uge.chatFusion.Server;
 import fr.uge.chatFusion.Context.ContextServer;
 import fr.uge.chatFusion.Context.ContextServerFusion;
 import fr.uge.chatFusion.Context.InterfaceContexteServ;
+import fr.uge.chatFusion.Utils.MessageFusion;
 import fr.uge.chatFusion.Utils.MessagePrivate;
 import fr.uge.chatFusion.Utils.MessagePublique;
 
@@ -25,28 +26,38 @@ public class Server {
 
 	private final ServerSocketChannel serverSocketChannel;
 	private final Selector selector;
-	private final Map<SocketChannel, String> clients;
-	private final Map<InetSocketAddress, String> servers;
-	private ServerSocketChannel leader;
+	private final HashMap<String, ContextServer> clients;
+	private final HashMap<String, InetSocketAddress> servers;
+	private InetSocketAddress leader;
+	private ContextServerFusion leaderContext;
 	private final Thread console;
 	private final ArrayDeque<String> queue = new ArrayDeque<>();
 	private final String name;
+	private final InetSocketAddress inetSocketAddress ;
 
 	public Server(int port, String name) throws IOException {
+		inetSocketAddress = new InetSocketAddress(port);
 		serverSocketChannel = ServerSocketChannel.open();
-		serverSocketChannel.bind(new InetSocketAddress(port));
+		serverSocketChannel.bind(inetSocketAddress);
 		selector = Selector.open();
 		//selectorServers = Selector.open();
 		this.clients = new HashMap<>();
-		this.leader = serverSocketChannel;
+		this.leader =  inetSocketAddress;
 		this.servers = new HashMap<>();
 		console = new Thread(this::consoleServerRun);
 		console.setDaemon(true);
 		this.name = name;
-
+		// Si leader est lui-même le contexte leader est null
+		leaderContext = null;
 		this.sc = SocketChannel.open();
+		
 
 	}
+	
+	public boolean isLeader() {
+		return leader.equals(inetSocketAddress) ;
+	}
+	
 
 	private void consoleServerRun(){
 		try (var scanner = new Scanner(System.in)){
@@ -69,19 +80,14 @@ public class Server {
 		var newSc = new InetSocketAddress(ipAdress, port);
 		sc.configureBlocking(false);
 		var key = sc.register(selector, SelectionKey.OP_CONNECT);
-		uniqueContext = new ContextServerFusion(key, logger);
+		uniqueContext = new ContextServerFusion(key, logger, this);
 		key.attach(uniqueContext);
 		sc.connect(newSc);
+	}
 
-		/*while (!Thread.interrupted()) {
-			try {
-				selector.select(this::treatKey);
-				processCommands();
-			} catch (UncheckedIOException tunneled) {
-				throw tunneled.getCause();
-			}
-		}*/
-
+	private void transmitToLeader(String ipAdress, int port) throws IOException {
+		var adr = new InetSocketAddress(ipAdress, port);
+		leaderContext.makeConnectionPaquetToLeader(adr);
 	}
 
 	private void processCommands(){
@@ -98,12 +104,13 @@ public class Server {
 					break;
 				}
 				System.out.println("Tentative de Fusion");
-				/*if(Integer.parseInt(tmp[2]) < 1024 || Integer.parseInt(tmp[2]) >49151){
-					logger.warning("Port invalide");
-				}*/
+
 
 				try {
-					processAskFusion(tmp[1], Integer.parseInt(tmp[2]));
+					if(isLeader())
+						processAskFusion(tmp[1], Integer.parseInt(tmp[2]));
+					//else
+					//	transmitToLeader(msg);
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
@@ -132,29 +139,35 @@ public class Server {
 	}
 
 	private void updateClients() {
-		for(var key : selector.keys()) {
-			if(!key.isValid()) {
-				clients.remove(key.channel());
+//		for(var key : selector.keys()) {
+//			if(!key.isValid()) {
+//				clients.remove(key.channel());
+//			}
+//		}
+		
+		for( var entry : clients.entrySet()) {
+			if(!entry.getValue().getKey().isValid()) {
+				clients.remove(entry.getKey());
 			}
 		}
 	}
 
-	private void treatKeyClient(SelectionKey key) {
-		try {
-			if (key.isValid() && key.isConnectable()) {
-				uniqueContext.doConnect(name, servers);
-			}
-			if (key.isValid() && key.isWritable()) {
-				uniqueContext.doWrite();
-			}
-			if (key.isValid() && key.isReadable()) {
-				uniqueContext.doRead();
-			}
-		} catch (IOException ioe) {
-			// lambda call in select requires to tunnel IOException
-			throw new UncheckedIOException(ioe);
-		}
-	}
+//	private void treatKeyClient(SelectionKey key) {
+//		try {
+//			if (key.isValid() && key.isConnectable()) {
+//				uniqueContext.doConnect(name, servers);
+//			}
+//			if (key.isValid() && key.isWritable()) {
+//				uniqueContext.doWrite();
+//			}
+//			if (key.isValid() && key.isReadable()) {
+//				uniqueContext.doRead();
+//			}
+//		} catch (IOException ioe) {
+//			// lambda call in select requires to tunnel IOException
+//			throw new UncheckedIOException(ioe);
+//		}
+//	}
 
 	private void treatKey(SelectionKey key) {
 		Helpers.printSelectedKey(key); // for debug
@@ -163,7 +176,7 @@ public class Server {
 				doAccept(key);
 			}
 			if (key.isValid() && key.isConnectable()) {
-				uniqueContext.doConnect("aze",servers);
+				uniqueContext.doConnect(name, inetSocketAddress ,servers);
 			}
 		} catch (IOException ioe) {
 			// lambda call in select requires to tunnel IOException
@@ -206,7 +219,13 @@ public class Server {
 	}
 
 	public void broadcast(MessagePublique msg, SelectionKey k) {
-		for (var key : selector.keys()) {
+		for(var clients : this.clients.entrySet()) {
+			var c = clients.getValue();
+			if (Objects.isNull(c))
+				continue;
+			c.queueMessage(msg);
+		}
+		/*for (var key : selector.keys()) {
 			// ATTENTION
 			ContextServer c = (ContextServer) key.attachment();
 			if (Objects.isNull(c))
@@ -214,17 +233,39 @@ public class Server {
 			if (key.isValid() && key != k) {
 				c.queueMessage(msg);
 			}
+		}*/
+	}
 
+	public boolean register(String login, ContextServer context) {
+		if (clients.containsKey(login)) {
+			return false;
+		} else {
+			clients.put(login, context);
+			return true;
 		}
 	}
 
-	public boolean register(String login, SocketChannel sc) {
-		if (clients.containsValue(login)) {
-			return false;
-		} else {
-			clients.put(sc, login);
+	public boolean verifyServers(MessageFusion msg) {
+		if(msg.nbrServ() == 0){
+			servers.put(msg.login(), msg.addressEmetteur());
+			System.out.println("servers : " + servers);
+			for (var value : servers.entrySet()) {
+				System.out.println(value.getKey() + " " + value.getValue());
+			}
 			return true;
 		}
+		for (var server : msg.servers().values()) {
+			if(servers.containsValue(server)) {
+				return false;
+			}
+		}
+		servers.put(msg.login(), msg.addressEmetteur());
+		servers.putAll(msg.servers());
+		System.out.println("servers : " + servers);
+		for (var value : servers.entrySet()) {
+			System.out.println(value.getKey() + " " + value.getValue());
+		}
+		return true;
 	}
 
 	public static void main(String[] args) throws NumberFormatException, IOException {
@@ -240,16 +281,25 @@ public class Server {
 	}
 
 	public void sendPrivateMessage(MessagePrivate value, SelectionKey k) {
-		for (var entry : clients.entrySet()) {
-			if (entry.getValue().equals(value.loginDest())) {
-				var key = entry.getKey().keyFor(selector);
-				ContextServer c = (ContextServer) key.attachment();
-				c.queueMessage(value);
-				return;
-			}
+		
+		var context = clients.get(value.loginDest());
+		if(context != null) {
+			context.queueMessage(value);
+			return;
 		}
 		var c = (InterfaceContexteServ) k.attachment();
 		c.sendUserNotFound(value);
-		System.out.println("pas trouvé");
+		
+//		for (var entry : clients.entrySet()) {
+//			if (entry.getValue().equals(value.loginDest())) {
+//				var key = entry.getKey().keyFor(selector);
+//				ContextServer c = (ContextServer) key.attachment();
+//				c.queueMessage(value);
+//				return;
+//			}
+//		}
+//		var c = (InterfaceContexteServ) k.attachment();
+//		c.sendUserNotFound(value);
+//		System.out.println("pas trouvé");
 	}
 }

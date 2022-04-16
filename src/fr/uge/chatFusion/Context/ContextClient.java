@@ -130,9 +130,7 @@ public class ContextClient {
 			msg.encode(bufferOut);
 			queue.pop();
 			updateInterestOps();
-
 		}
-
 	}
 
 	/**

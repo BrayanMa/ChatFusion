@@ -1,6 +1,5 @@
 package fr.uge.chatFusion.Reader.Primitive;
 
-import fr.uge.chatFusion.Reader.Primitive.IntReader;
 import fr.uge.chatFusion.Reader.Reader;
 
 import java.nio.ByteBuffer;
