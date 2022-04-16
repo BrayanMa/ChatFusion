@@ -20,7 +20,7 @@ public class ResponseFusionReader implements Reader<ResponseFusion> {
     private final InetSocketAddressReaderv4 inetv4Reader = new InetSocketAddressReaderv4();
     private final InetSocketAddressReaderv6 inetv6Reader = new InetSocketAddressReaderv6();
 
-    private String nameLeader;
+    private InetSocketAddress adressLeader;
     private Map<String, InetSocketAddress> servers = new HashMap<>();
     private ResponseFusion responseFusion;
 
@@ -29,12 +29,32 @@ public class ResponseFusionReader implements Reader<ResponseFusion> {
         if (state == State.DONE || state == State.ERROR) {
             throw new IllegalStateException();
         }
-        var leaderState = stringReader.process(bb);
-        if (leaderState != ProcessStatus.DONE) {
-            return leaderState;
+
+        var addressLeaderStatus = intReader.process(bb);
+        if (addressLeaderStatus != ProcessStatus.DONE) {
+            return addressLeaderStatus;
         }
-        nameLeader = stringReader.get();
-        stringReader.reset();
+        var ipVLeader = intReader.get();
+        intReader.reset();
+
+        if (ipVLeader == 4) {
+            var addressLeaderStatusv4 = inetv4Reader.process(bb);
+            if (addressLeaderStatusv4 != ProcessStatus.DONE) {
+                return addressLeaderStatusv4;
+            }
+            adressLeader = inetv4Reader.get();
+            inetv4Reader.reset();
+            adressLeader = new InetSocketAddress(adressLeader.getAddress(), adressLeader.getPort());
+        } else if (ipVLeader == 6) {
+            var addressLeaderStatusv6 = inetv6Reader.process(bb);
+            if (addressLeaderStatusv6 != ProcessStatus.DONE) {
+                return addressLeaderStatusv6;
+            }
+            adressLeader = inetv6Reader.get();
+            inetv6Reader.reset();
+            adressLeader = new InetSocketAddress(adressLeader.getAddress(), adressLeader.getPort());
+        }  else
+            return ProcessStatus.ERROR;
 
         var nbServerState = intReader.process(bb);
         if (nbServerState != ProcessStatus.DONE) {
@@ -78,19 +98,13 @@ public class ResponseFusionReader implements Reader<ResponseFusion> {
                 return ProcessStatus.ERROR;
             }
         }
-
         state = State.DONE;
-        responseFusion = new ResponseFusion(nameLeader, servers);
-        //System.out.println(responseFusion.leader());
-
+        responseFusion = new ResponseFusion(adressLeader, servers);
         return ProcessStatus.DONE;
     }
 
     @Override
     public ResponseFusion get() {
-        if (state != State.DONE) {
-            throw new IllegalStateException();
-        }
         return responseFusion;
     }
 
@@ -99,7 +113,5 @@ public class ResponseFusionReader implements Reader<ResponseFusion> {
         state = State.WAITING;
         stringReader.reset();
         intReader.reset();
-        inetv4Reader.reset();
-        inetv6Reader.reset();
     }
 }

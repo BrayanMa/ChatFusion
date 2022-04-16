@@ -308,4 +308,14 @@ public class Server {
 	public HashMap<String, InetSocketAddress> getServers() {
 		return servers;
 	}
+
+	public InetSocketAddress getInetSocketAddress() {
+		return inetSocketAddress;
+	}
+
+	public void setLeader(InetSocketAddress leader, ContextServerFusion contextLeader) {
+		this.leader = leader;
+		this.leaderContext = contextLeader;
+	}
+
 }

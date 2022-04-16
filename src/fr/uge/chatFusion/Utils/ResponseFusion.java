@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
-public record ResponseFusion(String leader, Map<String, InetSocketAddress> servers)  implements Message {
+public record ResponseFusion(InetSocketAddress leader, Map<String, InetSocketAddress> servers)  implements Message {
     @Override
     public String login() {
         return "";
@@ -22,8 +22,9 @@ public record ResponseFusion(String leader, Map<String, InetSocketAddress> serve
     @Override
     public void encode(ByteBuffer bufferOut) {
         bufferOut.put((byte) 9);
-        bufferOut.putInt(leader.length());
-        bufferOut.put(StandardCharsets.UTF_8.encode(leader));
+        bufferOut.putInt(leader.getAddress().getAddress().length);
+        bufferOut.put(leader.getAddress().getAddress());
+        bufferOut.putInt(leader.getPort());
         bufferOut.putInt(servers.size());
         for (var entry : servers.entrySet()) {
             bufferOut.putInt(entry.getKey().length());

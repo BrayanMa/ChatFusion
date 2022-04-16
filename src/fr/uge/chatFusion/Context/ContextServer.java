@@ -148,7 +148,7 @@ public class ContextServer implements InterfaceContexteServ {
 
 	private void sendResponseFusion(boolean condition, String leader, MessageFusion messageFusion) {
 		if (condition) {
-			var message = new ResponseFusion(leader, server.getServers());
+			var message = new ResponseFusion(server.getInetSocketAddress(), server.getServers());
 			message.encode(bufferOut);
 		}
 		else

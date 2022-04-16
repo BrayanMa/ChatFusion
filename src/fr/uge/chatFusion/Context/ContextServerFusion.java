@@ -66,12 +66,16 @@ public class ContextServerFusion implements InterfaceContexteServ {
 				case DONE:
 					var value = responseFusionReader.get();
 					System.out.println("LEADER : " + value.leader());
+					if(server.getInetSocketAddress() != value.leader()) {
+						server.setLeader(value.leader(), this);
+					}
+					//server.setLeader();
 					responseFusionReader.reset();
 					break;
 				case REFILL:
 					return;
 				case ERROR:
-					System.out.println("ERREURvqfvqvdfvqd");
+					logger.severe("Error in response fusion");
 					silentlyClose();
 					return;
 			}
