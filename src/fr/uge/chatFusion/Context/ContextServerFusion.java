@@ -4,10 +4,12 @@ import fr.uge.chatFusion.Reader.Message.MessageReader;
 import fr.uge.chatFusion.Reader.Message.PrivateMessageReader;
 import fr.uge.chatFusion.Reader.OpReader;
 import fr.uge.chatFusion.Reader.Reader;
+import fr.uge.chatFusion.Reader.Response.ResponseFusionReader;
 import fr.uge.chatFusion.Server.Server;
 import fr.uge.chatFusion.Utils.Message;
 import fr.uge.chatFusion.Utils.MessageFusion;
 import fr.uge.chatFusion.Utils.MessageFusionTransitToLeader;
+import fr.uge.chatFusion.Utils.ResponseFusion;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -32,6 +34,7 @@ public class ContextServerFusion implements InterfaceContexteServ {
 	private final ArrayDeque<Message> queue = new ArrayDeque<>();
 	private final MessageReader messageReader = new MessageReader();
 	private final PrivateMessageReader privateMessageReader = new PrivateMessageReader();
+	private final ResponseFusionReader responseFusionReader = new ResponseFusionReader();
 	private final Server server;
 	private final OpReader opReader = new OpReader();
 
@@ -45,8 +48,6 @@ public class ContextServerFusion implements InterfaceContexteServ {
 	}
 
 	private void makeConnectionPaquet(String nameServ, InetSocketAddress address,HashMap<String, InetSocketAddress> servers) throws IOException {
-		//bufferOut.clear();
-		// bufferOut.flip();
 		var message = new MessageFusion(nameServ,address,servers.size(),servers);
 		message.encode(bufferOut);
 		doWrite();
@@ -57,6 +58,25 @@ public class ContextServerFusion implements InterfaceContexteServ {
 		message.encode(bufferOut);
 		doWrite();
 	}
+
+	private void processInResponseFusion() {
+		for (;;) {
+			Reader.ProcessStatus status = responseFusionReader.process(bufferIn);
+			switch (status) {
+				case DONE:
+					var value = responseFusionReader.get();
+					System.out.println("LEADER : " + value.leader());
+					responseFusionReader.reset();
+					break;
+				case REFILL:
+					return;
+				case ERROR:
+					System.out.println("ERREURvqfvqvdfvqd");
+					silentlyClose();
+					return;
+			}
+		}
+	}
 	private void processIn() {
 		for (;;) {
 			Reader.ProcessStatus status = opReader.process(bufferIn);
@@ -64,7 +84,10 @@ public class ContextServerFusion implements InterfaceContexteServ {
 				case DONE:
 					var opCode = opReader.get();
 					switch (opCode) {
-						case 9 -> logger.info("Fusion établie");
+						case 9 -> {logger.info("Fusion établie");
+									processInResponseFusion();
+
+							}
 						case 10 -> logger.warning("Fusion refusée");
 					}
 					opReader.reset();
@@ -79,9 +102,7 @@ public class ContextServerFusion implements InterfaceContexteServ {
 	}
 
 	private void processOut() {
-
 		updateInterestOps();
-
 	}
 
 	/**

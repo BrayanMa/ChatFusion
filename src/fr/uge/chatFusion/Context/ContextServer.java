@@ -10,6 +10,7 @@ import fr.uge.chatFusion.Server.Server;
 import fr.uge.chatFusion.Utils.Message;
 import fr.uge.chatFusion.Utils.MessageFusion;
 import fr.uge.chatFusion.Utils.MessagePrivate;
+import fr.uge.chatFusion.Utils.ResponseFusion;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -145,20 +146,18 @@ public class ContextServer implements InterfaceContexteServ {
 		updateInterestOps();
 	}
 
-	private void sendResponseFusion(boolean condition) {
-		if (condition)
-			bufferOut.put((byte) 9);
+	private void sendResponseFusion(boolean condition, String leader, MessageFusion messageFusion) {
+		if (condition) {
+			var message = new ResponseFusion(leader, server.getServers());
+			message.encode(bufferOut);
+		}
 		else
 			bufferOut.put((byte) 10);
 		updateInterestOps();
 	}
 
 	private void verifyServers(MessageFusion messageFusion) {
-		if(server.verifyServers(messageFusion)) {
-			sendResponseFusion(true);
-		}
-		else
-			sendResponseFusion(false);
+		sendResponseFusion(server.verifyServers(messageFusion), server.verifyLeader(messageFusion.login()), messageFusion);
 	}
 
 	private void verifyConnection(String login) {
@@ -185,8 +184,6 @@ public class ContextServer implements InterfaceContexteServ {
 					System.out.println("Tentative de fusion reçu");
 					processInDemandFusion();
 				}
-
-
 				}
 				opReader.reset();
 				break;

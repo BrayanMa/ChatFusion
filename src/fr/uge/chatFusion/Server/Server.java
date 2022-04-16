@@ -245,13 +245,15 @@ public class Server {
 		}
 	}
 
+	public String verifyLeader(String nameEmetteur){
+		return name.compareTo(nameEmetteur) < 0 ? name : nameEmetteur;
+	}
+
 	public boolean verifyServers(MessageFusion msg) {
+
+
 		if(msg.nbrServ() == 0){
 			servers.put(msg.login(), msg.addressEmetteur());
-			System.out.println("servers : " + servers);
-			for (var value : servers.entrySet()) {
-				System.out.println(value.getKey() + " " + value.getValue());
-			}
 			return true;
 		}
 		for (var server : msg.servers().values()) {
@@ -301,5 +303,9 @@ public class Server {
 //		var c = (InterfaceContexteServ) k.attachment();
 //		c.sendUserNotFound(value);
 //		System.out.println("pas trouvé");
+	}
+
+	public HashMap<String, InetSocketAddress> getServers() {
+		return servers;
 	}
 }
