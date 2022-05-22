@@ -1,19 +1,20 @@
 package fr.uge.chatFusion.Reader;
 
+import fr.uge.chatFusion.Reader.Primitive.StringReader;
+
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 public class ConnexionReader implements Reader<String>{
 
 
     private State state = State.WAITING;
-    //private final IntReader intReader = new IntReader();
     private final StringReader stringReader = new StringReader();
     private String login;
-    //private int opCode;
-    //private Connexion connexion;
 
     @Override
     public ProcessStatus process(ByteBuffer bb) {
+        Objects.requireNonNull(bb);
         if (state == State.DONE || state == State.ERROR) {
             throw new IllegalStateException();
         }

@@ -1,22 +1,38 @@
-package fr.uge.chatFusion.Reader;
+package fr.uge.chatFusion.Reader.Primitive;
+
+import fr.uge.chatFusion.Reader.Reader;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
-public class IntReader implements Reader<Integer> {
+public class StringReader implements Reader<String> {
 
-    private enum State {
-        DONE, WAITING, ERROR
-    };
+    private enum State {DONE, WAITING, ERROR};
 
     private State state = State.WAITING;
-    private final ByteBuffer internalBuffer = ByteBuffer.allocate(Integer.BYTES); // write-mode
-    private int value;
+    private final ByteBuffer internalBuffer = ByteBuffer.allocate(1024); // write-mode
+    private String string;
+    private final IntReader ir = new IntReader();
 
     @Override
     public ProcessStatus process(ByteBuffer buffer) {
-        if (state == State.DONE || state == State.ERROR) {
+        Objects.requireNonNull(buffer);
+        if(state == State.DONE || state == State.ERROR){
             throw new IllegalStateException();
         }
+
+
+        if(ir.process(buffer) != ProcessStatus.DONE)
+            return ProcessStatus.REFILL;
+        var size = ir.get();
+        if( size > 1024 || size < 0){
+            state = State.ERROR;
+            return ProcessStatus.ERROR;
+        }
+        internalBuffer.limit(size)   ;
+
+
         buffer.flip();
         try {
             if (buffer.remaining() <= internalBuffer.remaining()) {
@@ -35,21 +51,23 @@ public class IntReader implements Reader<Integer> {
         }
         state = State.DONE;
         internalBuffer.flip();
-        value = internalBuffer.getInt();
+        string = StandardCharsets.UTF_8.decode(internalBuffer).toString();
         return ProcessStatus.DONE;
     }
 
     @Override
-    public Integer get() {
-        if (state != State.DONE) {
+    public String get() {
+        if(state != State.DONE){
             throw new IllegalStateException();
         }
-        return value;
+        return string;
     }
 
     @Override
     public void reset() {
         state = State.WAITING;
+        ir.reset();
         internalBuffer.clear();
     }
 }
+

@@ -1,7 +1,10 @@
 package fr.uge.chatFusion.Reader;
 
 
+import fr.uge.chatFusion.Reader.Primitive.ByteReader;
+
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 public class OpReader implements Reader<Byte>{
 
@@ -11,6 +14,7 @@ public class OpReader implements Reader<Byte>{
 
     @Override
     public ProcessStatus process(ByteBuffer bb) {
+        Objects.requireNonNull(bb);
         if (state == State.DONE || state == State.ERROR) {
             throw new IllegalStateException();
         }

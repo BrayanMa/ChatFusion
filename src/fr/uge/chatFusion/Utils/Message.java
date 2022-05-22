@@ -4,7 +4,7 @@ import java.nio.ByteBuffer;
 
 public interface Message {
 
-	public String login();
-	public String msg();
-	public void encode(ByteBuffer bufferOut);
+	 String login();
+	 String msg();
+	 boolean encode(ByteBuffer bufferOut);
 }

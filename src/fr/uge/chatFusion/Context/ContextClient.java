@@ -1,10 +1,13 @@
 package fr.uge.chatFusion.Context;
 
-import fr.uge.chatFusion.Reader.MessageReader;
+import fr.uge.chatFusion.Reader.Message.FileMessageReader;
+import fr.uge.chatFusion.Reader.Message.MessageReader;
+import fr.uge.chatFusion.Client.Client;
 import fr.uge.chatFusion.Reader.OpReader;
-import fr.uge.chatFusion.Reader.PrivateMessageReader;
+import fr.uge.chatFusion.Reader.Message.PrivateMessageReader;
+import fr.uge.chatFusion.Reader.Primitive.StringReader;
+import fr.uge.chatFusion.Reader.Reader.ProcessStatus;
 import fr.uge.chatFusion.Reader.Reader;
-import fr.uge.chatFusion.Utils.MessagePublique;
 import fr.uge.chatFusion.Utils.Message;
 
 import java.io.IOException;
@@ -13,6 +16,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
+import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -26,35 +30,52 @@ public class ContextClient {
 	private final ArrayDeque<Message> queue = new ArrayDeque<>();
 	private final MessageReader messageReader = new MessageReader();
 	private final PrivateMessageReader privateMessageReader = new PrivateMessageReader();
+	private final StringReader stringreader = new StringReader();
+	private final FileMessageReader fileMessageReader = new FileMessageReader();
+
 	private final OpReader opReader = new OpReader();
 	private final Logger logger;
+	private final Client client;
 
 	private boolean closed = false;
 
-	public ContextClient(SelectionKey key, Logger logger) {
+
+	public ContextClient(SelectionKey key, Logger logger, Client client) {
+		Objects.requireNonNull(key);
+		Objects.requireNonNull(logger);
+		Objects.requireNonNull(client);
 		this.key = key;
 		this.sc = (SocketChannel) key.channel();
 		this.logger = logger;
+		this.client = client;
 	}
 
+	/**
+	 * Create connexion paquet to initiate the connexion with a server
+	 * 
+	 * @param login String login
+	 * @throws IOException
+	 */
 	private void makeConnectionPaquet(String login) throws IOException {
 		bufferOut.clear();
-		// bufferOut.flip();
-		bufferOut.put( (byte) 0);
+		bufferOut.put((byte) 0);
 		bufferOut.putInt(login.length());
 		bufferOut.put(StandardCharsets.UTF_8.encode(login));
 		doWrite();
 	}
 
+	/**
+	 * Process a public message when the client receive it
+	 */
 	private void processInMessage() {
 		for (;;) {
 			Reader.ProcessStatus status = messageReader.process(bufferIn);
 			switch (status) {
 			case DONE:
 				var value = messageReader.get();
-				System.out.println(value.login() + " \n\t↳ " + value.msg());
+				System.out.println(value.nomServ() + ":" + value.login() + " \n\t↳ " + value.msg());
 				messageReader.reset();
-				break;
+				return;
 			case REFILL:
 				return;
 			case ERROR:
@@ -64,15 +85,19 @@ public class ContextClient {
 		}
 	}
 
+	/**
+	 * Process a private message when the client receive it
+	 */
 	private void processInPrivateMessage() {
 		for (;;) {
 			Reader.ProcessStatus status = privateMessageReader.process(bufferIn);
 			switch (status) {
 			case DONE:
 				var value = privateMessageReader.get();
-				System.out.println(value.login() + " \n\t↳ " + value.msg());
+				System.out.println("Private message from : " + value.servEmetteur() + ":" + value.login() + " \n\t↳ "
+						+ value.msg());
 				privateMessageReader.reset();
-				break;
+				return;
 			case REFILL:
 				return;
 			case ERROR:
@@ -95,13 +120,17 @@ public class ContextClient {
 			case DONE:
 				var opCode = opReader.get();
 				switch (opCode) {
-				case 7 -> logger.info("Connection établie");
+				case 7 -> {
+					logger.info("Connection établie");
+					processInConnection();
+				}
 				case 8 -> {
 					logger.warning("Erreur de connection");
 					silentlyClose();
 				}
 				case 2 -> processInMessage();
 				case 3 -> processInPrivateMessage();
+				case 4 -> processInFileMessage();
 				case 11 -> logger.info("Destinataire n'a pas été trouvé");
 				}
 				opReader.reset();
@@ -116,13 +145,45 @@ public class ContextClient {
 	}
 
 	/**
-	 * Add a message to the message queue, tries to fill bufferOut and
-	 * updateInterestOps
-	 *
-	 * @param msg
+	 * Process a file when the client receive it
+	 */
+	private void processInFileMessage() {
+		for (;;) {
+			Reader.ProcessStatus status = fileMessageReader.process(bufferIn);
+			switch (status) {
+			case DONE:
+				var value = fileMessageReader.get();
+				client.sendFileMessage(value);
+				fileMessageReader.reset();
+				return;
+			case REFILL:
+				return;
+			case ERROR:
+				silentlyClose();
+				return;
+			}
+		}
+	}
+
+	/**
+	 * Process a connexion message when the client receive it
+	 */
+	private void processInConnection() {
+
+		var nomServState = stringreader.process(bufferIn);
+		if (nomServState != ProcessStatus.DONE) {
+			client.servName("unknow");
+			return;
+		}
+		client.servName(stringreader.get());
+		stringreader.reset();
+	}
+
+	/**
+	 * Put a message in the queue
 	 */
 	public void queueMessage(Message msg) {
-		// TODO
+		Objects.requireNonNull(msg);
 		queue.add(msg);
 		processOut();
 		updateInterestOps();
@@ -132,16 +193,14 @@ public class ContextClient {
 	 * Try to fill bufferOut from the message queue
 	 */
 	private void processOut() {
-		// TODO
 		while (!queue.isEmpty()) {
 			var msg = queue.peek();
 			// var size = msg.login().length() + msg.texte().length() + 2 * Integer.BYTES;
-			msg.encode(bufferOut);
-			queue.pop();
+			if (msg.encode(bufferOut)) {
+				queue.pop();
+			}
 			updateInterestOps();
-
 		}
-
 	}
 
 	/**
@@ -154,18 +213,15 @@ public class ContextClient {
 	 */
 
 	private void updateInterestOps() {
-		int interestOps = 0;
-		if (!closed && bufferIn.hasRemaining()) {
-			interestOps |= SelectionKey.OP_READ;
-		}
-		if (bufferOut.position() != 0) {
-			interestOps |= SelectionKey.OP_WRITE;
-		}
-		if (interestOps == 0) {
+		if (closed) {
 			silentlyClose();
 			return;
 		}
-		key.interestOps(interestOps);
+		if (bufferOut.position() != 0) {
+			key.interestOps(SelectionKey.OP_WRITE);
+		} else {
+			key.interestOps(SelectionKey.OP_READ);
+		}
 	}
 
 	private void silentlyClose() {
@@ -177,11 +233,8 @@ public class ContextClient {
 	}
 
 	/**
-	 * Performs the read action on sc
-	 * <p>
-	 * The convention is that both buffers are in write-mode before the call to
-	 * doRead and after the call
-	 *
+	 * Read
+	 * 
 	 * @throws IOException
 	 */
 	public void doRead() throws IOException {
@@ -192,14 +245,10 @@ public class ContextClient {
 	}
 
 	/**
-	 * Performs the write action on sc
-	 * <p>
-	 * The convention is that both buffers are in write-mode before the call to
-	 * doWrite and after the call
-	 *
+	 * Write
+	 * 
 	 * @throws IOException
 	 */
-
 	public void doWrite() throws IOException {
 		bufferOut.flip();
 		sc.write(bufferOut);
@@ -208,8 +257,14 @@ public class ContextClient {
 		updateInterestOps();
 	}
 
+	/**
+	 * Connect
+	 * 
+	 * @param login String login
+	 * @throws IOException
+	 */
 	public void doConnect(String login) throws IOException {
-		// TODO
+		Objects.requireNonNull(login);
 		if (!sc.finishConnect()) {
 			return;
 		}

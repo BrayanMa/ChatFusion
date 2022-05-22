@@ -1,15 +1,24 @@
-package fr.uge.chatFusion.Reader;
+package fr.uge.chatFusion.Reader.Primitive;
 
+import fr.uge.chatFusion.Reader.Reader;
+import fr.uge.chatFusion.Reader.State;
+
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
-public class ByteReader implements Reader<Byte> {
+public class InetSocketAddressReaderv4 implements Reader<InetSocketAddress> {
 
 	private State state = State.WAITING;
-	private final ByteBuffer internalBuffer = ByteBuffer.allocate(Byte.BYTES); // write-mode
-	private byte value;
+	private final ByteBuffer internalBuffer = ByteBuffer.allocate(4 + Integer.BYTES); // write-mode
+	
+	private InetSocketAddress value;
 
 	@Override
 	public ProcessStatus process(ByteBuffer bb) {
+		Objects.requireNonNull(bb);
 		if (state == State.DONE || state == State.ERROR) {
 			throw new IllegalStateException();
 		}
@@ -31,12 +40,23 @@ public class ByteReader implements Reader<Byte> {
 		}
 		state = State.DONE;
 		internalBuffer.flip();
-		value = internalBuffer.get();
+		
+		byte[] ipAddr = new byte[4];
+		for (int i = 0; i < 4; i++) {
+			ipAddr[i] = internalBuffer.get();
+		}
+		try {
+			value = new InetSocketAddress(InetAddress.getByAddress(ipAddr),internalBuffer.getInt());
+
+		} catch (UnknownHostException e) {
+			return ProcessStatus.ERROR;
+		}
+		
 		return ProcessStatus.DONE;
 	}
 
 	@Override
-	public Byte get() {
+	public InetSocketAddress get() {
 		if (state != State.DONE) {
 			throw new IllegalStateException();
 		}
